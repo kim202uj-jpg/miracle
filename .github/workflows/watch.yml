@@ -1,0 +1,62 @@
+name: naver-booking-watch
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # 최소 5분. 실제로는 몇 분씩 밀릴 수 있음
+  workflow_dispatch:
+    inputs:
+      keywords:
+        description: "테스트용 키워드 (쉼표 구분). 비우면 기본값(박동수,초진)"
+        required: false
+        default: ""
+
+concurrency:
+  group: naver-booking-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Restore state
+        uses: actions/cache/restore@v4
+        with:
+          path: state
+          key: state-${{ github.run_id }}
+          restore-keys: state-
+
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      - name: Run watcher
+        id: watch
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          KEYWORDS: ${{ github.event.inputs.keywords || '박동수,초진' }}
+        run: python watch_once.py
+
+      - name: Save state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state
+          key: state-${{ github.run_id }}
+
+      - name: Upload debug on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug
+          path: debug/
+          retention-days: 3
