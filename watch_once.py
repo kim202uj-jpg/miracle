@@ -44,13 +44,18 @@ def save_state(s):
 def notify(text):
     if not TG_TOKEN or not TG_CHAT_ID:
         print("(텔레그램 미설정)", text)
-        return
-    r = requests.post(
-        f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage",
-        json={"chat_id": TG_CHAT_ID, "text": text, "disable_web_page_preview": True},
-        timeout=10,
-    )
-    print("telegram:", r.status_code)
+        return False
+    try:
+        r = requests.post(
+            f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage",
+            json={"chat_id": TG_CHAT_ID, "text": text, "disable_web_page_preview": True},
+            timeout=10,
+        )
+        print("telegram:", r.status_code, r.text[:200])
+        return r.ok
+    except Exception as e:
+        print("telegram 예외:", e)
+        return False
 
 
 def find_hit(lines):
@@ -111,8 +116,8 @@ def main():
 
     hit = find_hit(lines)
     if hit and not state.get("notified"):
-        notify(f"🚨 초진 항목 떴음!\n{hit[:100]}\n\n{URL}")
-        state["notified"] = True
+        if notify(f"🚨 초진 항목 떴음!\n{hit[:100]}\n\n{URL}"):
+            state["notified"] = True
         print("HIT:", hit[:80])
     elif not hit:
         if state.get("notified"):
@@ -123,8 +128,8 @@ def main():
         print("이미 알림 보낸 상태로 유지 중")
 
     if HEARTBEAT_HOURS and now - state.get("last_beat", 0) > HEARTBEAT_HOURS * 3600:
-        notify("✅ 감시 정상 작동 중")
-        state["last_beat"] = now
+        if notify("✅ 감시 정상 작동 중"):
+            state["last_beat"] = now
 
     save_state(state)
 
